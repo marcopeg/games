@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
     <title>Apple Catching Game</title>
     <style>
         * {
@@ -15,6 +18,11 @@
             font-family: 'Arial', sans-serif;
             overflow: hidden;
             background: linear-gradient(to bottom, #87CEEB 0%, #98D8C8 100%);
+            touch-action: none;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
         }
 
         #game-container {
@@ -81,6 +89,37 @@
 
         canvas {
             display: block;
+            touch-action: none;
+        }
+
+        #exit-button {
+            display: none;
+            position: fixed;
+            top: 15px;
+            right: 15px;
+            z-index: 2000;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.5);
+            color: white;
+            font-size: 32px;
+            font-weight: bold;
+            border: 3px solid rgba(255, 255, 255, 0.7);
+            cursor: pointer;
+            line-height: 54px;
+            text-align: center;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+
+        #exit-button:active {
+            background: rgba(0, 0, 0, 0.8);
+            transform: scale(0.9);
+        }
+
+        #exit-button.visible {
+            display: block;
         }
     </style>
 </head>
@@ -89,6 +128,7 @@
         <h1>🍎 Apple Catching Game 🍎</h1>
         <button id="start-button">START</button>
     </div>
+    <button id="exit-button">✕</button>
     <div id="game-container"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>

@@ -9,6 +9,10 @@ class GameScene extends Phaser.Scene {
     preload() {
         // Audio will be created dynamically using Web Audio API
         this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        // Resume audio context (required on mobile after user gesture)
+        if (this.audioContext.state === 'suspended') {
+            this.audioContext.resume();
+        }
     }
 
     create() {
@@ -213,11 +217,11 @@ class GameScene extends Phaser.Scene {
     }
 
     onPointerDown(pointer) {
-        // Check if pointer is over an apple
+        // Check if pointer is over an apple (generous hit area for little fingers)
         for (let apple of this.apples) {
             const radius = apple.getData('radius') || 30;
             const distance = Phaser.Math.Distance.Between(pointer.x, pointer.y, apple.x, apple.y);
-            if (distance < radius + 10) {
+            if (distance < radius + 25) {
                 this.draggedApple = apple;
                 apple.setData('isDragging', true);
                 break;
@@ -462,11 +466,21 @@ class GameScene extends Phaser.Scene {
 // Phaser configuration
 const config = {
     type: Phaser.AUTO,
-    width: window.innerWidth,
-    height: window.innerHeight,
     parent: 'game-container',
     backgroundColor: '#87CEEB',
     scene: GameScene,
+    scale: {
+        mode: Phaser.Scale.RESIZE,
+        width: window.innerWidth,
+        height: window.innerHeight,
+        autoCenter: Phaser.Scale.CENTER_BOTH
+    },
+    input: {
+        activePointers: 1,
+        touch: {
+            capture: true
+        }
+    },
     audio: {
         disableWebAudio: false
     }
@@ -474,91 +488,119 @@ const config = {
 
 let game;
 
-// Start button functionality
-document.getElementById('start-button').addEventListener('click', () => {
-    // Hide start screen
-    document.getElementById('start-screen').classList.add('hidden');
+// Detect if fullscreen API is available (iOS Safari doesn't support it)
+function canFullscreen() {
+    return !!(document.documentElement.requestFullscreen ||
+              document.documentElement.webkitRequestFullscreen ||
+              document.documentElement.msRequestFullscreen);
+}
 
-    // Start game
-    if (!game) {
-        game = new Phaser.Game(config);
-    }
+function isFullscreen() {
+    return !!(document.fullscreenElement || document.webkitFullscreenElement ||
+              document.mozFullScreenElement || document.msFullscreenElement);
+}
 
-    // Request fullscreen
+function requestFullscreen() {
     const element = document.documentElement;
     if (element.requestFullscreen) {
-        element.requestFullscreen().catch(err => {
-            console.log('Fullscreen not available:', err);
-        });
+        element.requestFullscreen().catch(() => {});
     } else if (element.webkitRequestFullscreen) {
         element.webkitRequestFullscreen();
     } else if (element.msRequestFullscreen) {
         element.msRequestFullscreen();
     }
-});
+}
 
-// Handle ESC key and fullscreen exit
+function exitFullscreen() {
+    if (document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+    } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen();
+    } else if (document.mozCancelFullScreen) {
+        document.mozCancelFullScreen();
+    } else if (document.msExitFullscreen) {
+        document.msExitFullscreen();
+    }
+}
+
+function startGame() {
+    document.getElementById('start-screen').classList.add('hidden');
+    document.getElementById('exit-button').classList.add('visible');
+
+    if (!game) {
+        game = new Phaser.Game(config);
+    }
+
+    // Try fullscreen on devices that support it
+    if (canFullscreen()) {
+        requestFullscreen();
+    }
+}
+
 function exitGame() {
-    // Show start screen
+    document.getElementById('exit-button').classList.remove('visible');
     document.getElementById('start-screen').classList.remove('hidden');
 
-    // Destroy game instance
+    if (isFullscreen()) {
+        exitFullscreen();
+    }
+
     if (game) {
         game.destroy(true);
         game = null;
     }
 }
 
-// Listen for fullscreen changes
-document.addEventListener('fullscreenchange', () => {
-    if (!document.fullscreenElement) {
-        exitGame();
-    }
+// Start button - use touchend + click for best mobile compatibility
+document.getElementById('start-button').addEventListener('click', startGame);
+
+// Exit button (the visible X for mobile users)
+document.getElementById('exit-button').addEventListener('click', (e) => {
+    e.stopPropagation();
+    exitGame();
 });
 
-document.addEventListener('webkitfullscreenchange', () => {
-    if (!document.webkitFullscreenElement) {
-        exitGame();
-    }
+// Listen for fullscreen changes (desktop browsers)
+['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'msfullscreenchange'].forEach(event => {
+    document.addEventListener(event, () => {
+        // Only exit game if fullscreen was exited AND we didn't trigger it ourselves
+        if (!isFullscreen() && game && document.getElementById('start-screen').classList.contains('hidden')) {
+            exitGame();
+        }
+    });
 });
 
-document.addEventListener('mozfullscreenchange', () => {
-    if (!document.mozFullScreenElement) {
-        exitGame();
-    }
-});
-
-document.addEventListener('msfullscreenchange', () => {
-    if (!document.msFullscreenElement) {
-        exitGame();
-    }
-});
-
-// Listen for ESC key press
+// ESC key (desktop)
 document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' || event.key === 'Esc') {
-        // Exit fullscreen if in fullscreen
-        if (document.fullscreenElement || document.webkitFullscreenElement ||
-            document.mozFullScreenElement || document.msFullscreenElement) {
-            if (document.exitFullscreen) {
-                document.exitFullscreen();
-            } else if (document.webkitExitFullscreen) {
-                document.webkitExitFullscreen();
-            } else if (document.mozCancelFullScreen) {
-                document.mozCancelFullScreen();
-            } else if (document.msExitFullscreen) {
-                document.msExitFullscreen();
-            }
-        } else {
-            // If not in fullscreen but game is running, still exit
+        if (isFullscreen()) {
+            exitFullscreen();
+        } else if (game) {
             exitGame();
         }
     }
 });
 
-// Handle window resize
-window.addEventListener('resize', () => {
+// Prevent default touch behaviors that interfere with the game
+document.addEventListener('touchmove', (e) => {
     if (game) {
-        game.scale.resize(window.innerWidth, window.innerHeight);
+        e.preventDefault();
     }
-});
+}, { passive: false });
+
+// Prevent pull-to-refresh and bounce scrolling
+document.addEventListener('touchstart', (e) => {
+    if (game && e.target.tagName !== 'BUTTON') {
+        e.preventDefault();
+    }
+}, { passive: false });
+
+// Prevent double-tap zoom on mobile
+let lastTouchEnd = 0;
+document.addEventListener('touchend', (e) => {
+    const now = Date.now();
+    if (now - lastTouchEnd <= 300) {
+        e.preventDefault();
+    }
+    lastTouchEnd = now;
+}, { passive: false });
